@@ -40,6 +40,21 @@ assert.deepEqual(parseHeaders("A: http://x:8080/y"), { A: "http://x:8080/y" });
 assert.deepEqual(parseHeaders("junk\n\n: novalue\nA: 1"), { A: "1" });
 assert.deepEqual(parseHeaders(undefined), {});
 
+/* --- trim.js: the inbox budget is bytes, strings are UTF-16 --- */
+
+const trim = require("../src/pkjs/trim.js");
+
+assert.equal(trim("hello", 10), "hello");
+assert.equal(trim("hello", 5), "hello");
+assert.equal(trim("hello", 4), "hell...");
+// Cyrillic is two bytes per character, so eight bytes hold four of them.
+assert.equal(trim("привет", 8), "прив...");
+assert.equal(trim("привет", 12), "привет");
+// A surrogate pair costs four bytes and must never be cut in half.
+assert.equal(trim("ab😀", 5), "ab...");
+assert.equal(trim("ab😀", 6), "ab😀");
+assert.equal(trim("", 10), "");
+
 /* --- config.js: the page is assembled as a string, so check its wiring --- */
 
 const configPage = require("../src/pkjs/config.js");
@@ -201,13 +216,13 @@ function configure(app, url) {
 
 // A reply too long for the watch inbox is trimmed rather than dropped.
 {
-  const long = "x".repeat(5000);
+  const long = "x".repeat(9000);
   const app = loadPkjs(fakeXhr({ status: 200, body: JSON.stringify({ response: long }) }));
   configure(app, "https://example.com/voice");
   app.fire("appmessage", { payload: { 10000: "hello" } });
 
   const shown = app.sent[0][KEYS.reply];
-  assert.equal(shown.length, 2003, "trimmed to the cap plus an ellipsis");
+  assert.equal(shown.length, 8003, "ASCII fills the whole byte budget");
   assert.ok(shown.endsWith("..."), "trimming must be visible");
 }
 

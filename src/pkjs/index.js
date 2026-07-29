@@ -1,5 +1,6 @@
 var keys = require('message_keys');
 var parseHeaders = require('./headers');
+var trim = require('./trim');
 var configPage = require('./config');
 
 var SETTINGS = 'voiceRelaySettings';
@@ -27,13 +28,12 @@ function settings() {
   }
 }
 
-/* The watch inbox is 8K; UTF-8 runs up to 4 bytes per character, so cap the
-   character count low enough that even the worst case fits. */
-var MAX_REPLY = 2000;
+// The watch opens an 8K inbox; leave room for the dictionary framing.
+var MAX_REPLY_BYTES = 8000;
 
 function send(key, text, what) {
   var payload = {};
-  payload[key] = text.length > MAX_REPLY ? text.slice(0, MAX_REPLY) + '...' : text;
+  payload[key] = trim(text, MAX_REPLY_BYTES);
   Pebble.sendAppMessage(payload, function () {
     log(what + ' delivered to watch');
   }, function (e) {
