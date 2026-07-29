@@ -4,5 +4,7 @@ node_modules/
 .lock-waf*
 *.pbw
 .DS_Store
-store/screen-*.png
 pebble_screenshot_*.png
+store/screen-*.png
+store/emery_*.png
+store/gabbro_*.png
