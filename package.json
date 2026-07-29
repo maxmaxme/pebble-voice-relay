@@ -1,0 +1,24 @@
+{
+  "name": "pebble-voice-relay",
+  "author": "Maxim Lepekha",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Voice Relay",
+    "uuid": "7af2fa7d-29df-419c-91fd-fdcd69b817b3",
+    "projectType": "moddable",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "capabilities": ["configurable"],
+    "targetPlatforms": ["emery"],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": ["text", "reply", "error"],
+    "resources": {
+      "media": []
+    }
+  }
+}
