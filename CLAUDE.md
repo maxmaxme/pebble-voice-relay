@@ -48,13 +48,17 @@ These were established by reading the PebbleOS firmware, not guessed:
 - **Button events reach the app while the system dictation window is open**, and
   that window uses Select to stop recording. Starting a second session there
   throws, so `main.js` guards with a `listening` flag.
-- **Touch exists but crashes the app under a drag.** It is exposed as
-  `embedded:sensor/Touch/pebble` (not `pebble/touch`), and each event dispatches
-  a JS callback in the app's task via `event_service`. A continuous drag
-  produces enough callbacks to kill the app — dragging *slowly* is the reliable
-  repro, since it lasts longer. Throttling inside the callback does not help;
-  the callback still runs per event. Verified by a build where touch only
-  logged and never drew: still died. Buttons do the scrolling instead.
+- **Touch exists but a drag gets the app closed by the firmware.** It is exposed
+  as `embedded:sensor/Touch/pebble` (not `pebble/touch`). The driver posts a
+  `TouchEvent_PositionUpdate` for every coordinate change, and the app's event
+  queue holds 32 (`MAX_TO_APP_EVENTS`) with a zero-timeout send. When it
+  overflows, `event_service` closes third-party apps outright:
+  `app_manager_close_current_app(false)` in `services/event_service/service.c`,
+  under `#ifndef CONFIG_RELEASE`. That is why the app vanishes with no
+  `fxAbort` and no reboot, and why dragging *slowly* is the reliable repro — it
+  lasts longer, so more events pile up. Throttling in JS cannot help: the
+  callback runs per event regardless, and XS is too slow to drain 32 in time.
+  Buttons scroll instead.
 - **The JS machine's default 32K static block is too small** for a reply of a
   few kilobytes plus the wrapped lines drawn from it — XS dies with `fxAbort
   memory full`, which no JS `try` can catch. `mdbl.c` asks for a bigger machine
@@ -75,9 +79,18 @@ These were established by reading the PebbleOS firmware, not guessed:
 ## Logging
 
 **`console.log` from the watch-side mod does not reach `pebble logs`** — only
-PebbleKit JS output and firmware lines show up. To see what the watch is doing,
-draw it on the screen with `show()`; log lines from `src/embeddedjs/` are
-effectively write-only.
+PebbleKit JS output (`pkjs>`) and firmware lines show up. The mod's console goes
+to `APP_LOG(APP_LOG_LEVEL_DEBUG_VERBOSE)` (`xs/platforms/pebble/xsHost.c`), which
+travels as an `AppLogMessage` on endpoint 2006 — a different path from both the
+phone's own logging and the firmware's `PBL_LOG`. The tool does ask for it
+(`AppLogShippingControl(enable=True)`), so the gap is somewhere in the phone
+bridge; `--phone <ip>` is worth a try before concluding the log is lost.
+
+Until that works, diagnose on the watch by drawing with `show()` — log lines
+from `src/embeddedjs/` are effectively write-only.
+
+That same path caps a log line at 90 bytes (`gTransmitBuffer`), splitting it
+mid-character, which is exactly what crashes the libpebble2 reader on Cyrillic.
 
 `pebble install --logs` reads logs through libpebble2, which **crashes on
 non-ASCII cut mid-character** by the log buffer. Never log a transcript, a
