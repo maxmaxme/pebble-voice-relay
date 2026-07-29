@@ -78,7 +78,9 @@ function flush() {
 
 const message = new Message({
   keys: ["text", "reply", "error"],
-  input: 640,
+  // Replies are prose and easily outgrow a small buffer; the firmware allows up
+  // to 8K per message, and anything larger is trimmed phone-side.
+  input: 8192,
   output: 640,
   onReadable() {
     const payload = message.read();

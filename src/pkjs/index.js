@@ -27,13 +27,20 @@ function settings() {
   }
 }
 
+/* The watch inbox is 8K; UTF-8 runs up to 4 bytes per character, so cap the
+   character count low enough that even the worst case fits. */
+var MAX_REPLY = 2000;
+
 function send(key, text, what) {
   var payload = {};
-  payload[key] = text;
+  payload[key] = text.length > MAX_REPLY ? text.slice(0, MAX_REPLY) + '...' : text;
   Pebble.sendAppMessage(payload, function () {
     log(what + ' delivered to watch');
   }, function (e) {
     log(what + ' NOT delivered: ' + JSON.stringify(e));
+    if (key !== keys.error) {
+      send(keys.error, 'The watch could not accept the reply.', 'error');
+    }
   });
 }
 

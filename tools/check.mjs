@@ -56,7 +56,7 @@ assert.match(page, /"https:\/\/x\/y"/, "saved url must be prefilled");
 
 const KEYS = { text: 10000, reply: 10001, error: 10002 };
 
-function loadPkjs(xhrFactory) {
+function loadPkjs(xhrFactory, { nack = false } = {}) {
   const sent = [];
   const logged = [];
   const listeners = {};
@@ -79,9 +79,14 @@ function loadPkjs(xhrFactory) {
       addEventListener: (event, fn) => {
         listeners[event] = fn;
       },
-      sendAppMessage: (payload, ok) => {
+      sendAppMessage: (payload, ok, fail) => {
         sent.push(payload);
-        ok?.();
+        // Refuse the first delivery only, so the fallback path can be observed.
+        if (nack && sent.length === 1) {
+          fail?.({ error: "nack" });
+        } else {
+          ok?.();
+        }
       },
       openURL: () => {},
     },
@@ -192,6 +197,30 @@ function configure(app, url) {
   configure(app, "https://example.com/voice");
   app.fire("appmessage", { payload: { 10000: "hello" } });
   assert.deepEqual(app.sent[0], { [KEYS.error]: "Network error." });
+}
+
+// A reply too long for the watch inbox is trimmed rather than dropped.
+{
+  const long = "x".repeat(5000);
+  const app = loadPkjs(fakeXhr({ status: 200, body: JSON.stringify({ response: long }) }));
+  configure(app, "https://example.com/voice");
+  app.fire("appmessage", { payload: { 10000: "hello" } });
+
+  const shown = app.sent[0][KEYS.reply];
+  assert.equal(shown.length, 2003, "trimmed to the cap plus an ellipsis");
+  assert.ok(shown.endsWith("..."), "trimming must be visible");
+}
+
+// A rejected delivery tells the watch, instead of leaving it on "Sending...".
+{
+  const app = loadPkjs(fakeXhr({ status: 200, body: JSON.stringify({ response: "hi" }) }), {
+    nack: true,
+  });
+  configure(app, "https://example.com/voice");
+  app.fire("appmessage", { payload: { 10000: "hello" } });
+
+  assert.deepEqual(app.sent[0], { [KEYS.reply]: "hi" });
+  assert.deepEqual(app.sent[1], { [KEYS.error]: "The watch could not accept the reply." });
 }
 
 // Logs must stay ASCII: libpebble2 crashes on a multi-byte char cut in half.
