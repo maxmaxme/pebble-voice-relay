@@ -38,11 +38,11 @@ and nothing is sent anywhere except the address you enter.
 3. The phone POSTs `{"text": "..."}` to your endpoint with your headers.
 4. The endpoint answers `{"response": "..."}` and the text appears on the watch.
 
-**Select** or a **tap** on the screen speaks again. **Up/Down** or a **vertical
-swipe** scroll a long reply. **Back** exits.
+**Select** speaks again. **Up/Down** scroll a page at a time, and dragging a
+finger up or down scrolls smoothly. **Back** exits.
 
-Gestures are only read between sessions: while recording, the screen belongs to
-the system's dictation window.
+Touch is only read between sessions: while recording, the screen belongs to the
+system's dictation window.
 
 ## Settings
 

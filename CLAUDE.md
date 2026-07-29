@@ -50,8 +50,10 @@ These were established by reading the PebbleOS firmware, not guessed:
   throws, so `main.js` guards with a `listening` flag.
 - **The touchscreen is reachable**, as `embedded:sensor/Touch/pebble` (not
   `pebble/touch`). Subscribe with `onSample`, then `sample()` returns
-  `[{x, y, id}]` while a finger is down and `[]` on liftoff. It cannot stop a
-  recording, though — see the dictation-window note above.
+  `[{x, y, id}]` while a finger is down and `[]` on liftoff. Scrolling follows
+  the finger by tracking pixels, not lines — acting only on liftoff feels
+  broken. Touch cannot stop a recording, though — see the dictation-window note
+  above.
 - **The JS machine's default 32K static block is too small** for a reply of a
   few kilobytes plus the wrapped lines drawn from it — XS dies with `fxAbort
   memory full`, which no JS `try` can catch. `mdbl.c` asks for a bigger machine

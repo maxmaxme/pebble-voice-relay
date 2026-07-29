@@ -4,11 +4,8 @@ import Message from "pebble/message";
 import Button from "pebble/button";
 import Touch from "embedded:sensor/Touch/pebble";
 import wrap from "./wrap";
-import gesture from "./gesture";
 
 const PADDING = 6;
-// A press that wanders less than this many pixels counts as a tap.
-const TAP_SLOP = 12;
 
 const RETRY = "\n\nPress Select to talk again.";
 
@@ -33,17 +30,41 @@ const lineHeight = font.height + 2;
 const visibleLines = Math.floor((render.height - 2 * PADDING) / lineHeight);
 
 let lines = [];
-let scroll = 0;
+// Scrolling is tracked in pixels rather than lines so a drag can follow the
+// finger instead of snapping a line at a time.
+let scrollTop = 0;
 let pending;
 let writable = false;
+
+function maxScrollTop() {
+  return Math.max(0, lines.length * lineHeight + 2 * PADDING - render.height);
+}
 
 function draw() {
   render.begin();
   render.fillRectangle(background, 0, 0, render.width, render.height);
-  for (let i = 0; i < visibleLines && scroll + i < lines.length; i++) {
-    render.drawText(lines[scroll + i], font, foreground, PADDING, PADDING + i * lineHeight);
+
+  const first = Math.floor(scrollTop / lineHeight);
+  const offset = PADDING - (scrollTop % lineHeight);
+  // One extra line, since the top and bottom ones are usually half-visible.
+  for (let i = 0; i <= visibleLines; i++) {
+    const line = lines[first + i];
+    if (line === undefined) {
+      break;
+    }
+    render.drawText(line, font, foreground, PADDING, offset + i * lineHeight);
   }
+
   render.end();
+}
+
+function scrollByPixels(delta) {
+  const wanted = Math.min(maxScrollTop(), Math.max(0, scrollTop + delta));
+  if (wanted === scrollTop) {
+    return;
+  }
+  scrollTop = wanted;
+  draw();
 }
 
 function show(text) {
@@ -51,7 +72,7 @@ function show(text) {
   // is the peak that runs the JS heap out on a long reply.
   lines = [];
   lines = wrap(text, render.width - 2 * PADDING, (s) => render.getTextWidth(s, font));
-  scroll = 0;
+  scrollTop = 0;
   draw();
 }
 
@@ -166,15 +187,8 @@ function listen() {
   }
 }
 
-function scrollBy(byLines) {
-  const maxScroll = Math.max(0, lines.length - visibleLines);
-  const wanted = Math.min(maxScroll, Math.max(0, scroll + byLines));
-  if (wanted === scroll) {
-    return;
-  }
-  scroll = wanted;
-  draw();
-}
+// A page, less one line of overlap so nothing is skipped between presses.
+const PAGE = Math.max(1, visibleLines - 1) * lineHeight;
 
 new Button({
   types: ["up", "down", "select"],
@@ -186,42 +200,28 @@ new Button({
       listen();
       return;
     }
-    scrollBy(type === "up" ? -1 : 1);
+    scrollByPixels(type === "up" ? -PAGE : PAGE);
   },
 });
 
-// Tap to talk, swipe to scroll. The system dictation window owns the screen
-// while recording, so gestures are only read between sessions.
-let touchOrigin;
-let touchLatest;
+// Drag to scroll, tracking the finger. The system dictation window owns the
+// screen while recording, so touches are only read between sessions.
+let dragFrom;
 
 const touch = new Touch({
   onSample() {
     const points = touch.sample();
 
-    if (listening) {
-      touchOrigin = undefined;
+    if (listening || !points.length) {
+      dragFrom = undefined;
       return;
     }
 
-    if (points.length) {
-      touchLatest = points[0];
-      touchOrigin = touchOrigin ?? points[0];
-      return;
+    const y = points[0].y;
+    if (dragFrom !== undefined) {
+      scrollByPixels(dragFrom - y);
     }
-
-    if (!touchOrigin) {
-      return;
-    }
-    const travelled = touchLatest.y - touchOrigin.y;
-    touchOrigin = undefined;
-
-    const move = gesture(travelled, lineHeight, TAP_SLOP);
-    if (move.tap) {
-      listen();
-    } else {
-      scrollBy(move.lines);
-    }
+    dragFrom = y;
   },
 });
 
