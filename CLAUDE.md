@@ -48,12 +48,13 @@ These were established by reading the PebbleOS firmware, not guessed:
 - **Button events reach the app while the system dictation window is open**, and
   that window uses Select to stop recording. Starting a second session there
   throws, so `main.js` guards with a `listening` flag.
-- **The touchscreen is reachable**, as `embedded:sensor/Touch/pebble` (not
-  `pebble/touch`). Subscribe with `onSample`, then `sample()` returns
-  `[{x, y, id}]` while a finger is down and `[]` on liftoff. Scrolling follows
-  the finger by tracking pixels, not lines — acting only on liftoff feels
-  broken. Touch cannot stop a recording, though — see the dictation-window note
-  above.
+- **Touch exists but crashes the app under a drag.** It is exposed as
+  `embedded:sensor/Touch/pebble` (not `pebble/touch`), and each event dispatches
+  a JS callback in the app's task via `event_service`. A continuous drag
+  produces enough callbacks to kill the app — dragging *slowly* is the reliable
+  repro, since it lasts longer. Throttling inside the callback does not help;
+  the callback still runs per event. Verified by a build where touch only
+  logged and never drew: still died. Buttons do the scrolling instead.
 - **The JS machine's default 32K static block is too small** for a reply of a
   few kilobytes plus the wrapped lines drawn from it — XS dies with `fxAbort
   memory full`, which no JS `try` can catch. `mdbl.c` asks for a bigger machine
@@ -72,6 +73,11 @@ These were established by reading the PebbleOS firmware, not guessed:
   app too. Test on hardware.
 
 ## Logging
+
+**`console.log` from the watch-side mod does not reach `pebble logs`** — only
+PebbleKit JS output and firmware lines show up. To see what the watch is doing,
+draw it on the screen with `show()`; log lines from `src/embeddedjs/` are
+effectively write-only.
 
 `pebble install --logs` reads logs through libpebble2, which **crashes on
 non-ASCII cut mid-character** by the log buffer. Never log a transcript, a

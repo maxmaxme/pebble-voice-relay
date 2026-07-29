@@ -38,11 +38,10 @@ and nothing is sent anywhere except the address you enter.
 3. The phone POSTs `{"text": "..."}` to your endpoint with your headers.
 4. The endpoint answers `{"response": "..."}` and the text appears on the watch.
 
-**Select** speaks again. **Up/Down** scroll a page at a time, and dragging a
-finger up or down scrolls smoothly. **Back** exits.
+**Select** speaks again. **Up/Down** scroll a page at a time. **Back** exits.
 
-Touch is only read between sessions: while recording, the screen belongs to the
-system's dictation window.
+The screen is a touchscreen, but scrolling by finger is not offered — see the
+note at the bottom.
 
 ## Settings
 
@@ -149,3 +148,8 @@ travels over the same Bluetooth link as the audio.
   exposes it, but recording happens inside the system's modal dictation window,
   where stop-with-result is bound to Select. The API an app can call
   (`dictation.stop()`) kills the session without returning a transcript.
+- **Scrolling by finger.** Every touch event dispatches a JS callback in the
+  app's task, and a continuous drag produces enough of them to take the app
+  down — reliably so when dragging slowly, which lasts longer. Throttling
+  inside the callback does not help, because the callback still runs per event.
+  Buttons scroll instead.

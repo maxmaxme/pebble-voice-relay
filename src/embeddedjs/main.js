@@ -2,26 +2,9 @@ import Poco from "commodetto/Poco";
 import Dictation from "pebble/dictation";
 import Message from "pebble/message";
 import Button from "pebble/button";
-import Touch from "embedded:sensor/Touch/pebble";
 import wrap from "./wrap";
 
 const PADDING = 6;
-
-const RETRY = "\n\nPress Select to talk again.";
-
-// Keyed by DictationSessionStatus from the firmware. `log` names the status for
-// the console, `show` is what goes on the screen.
-const DICTATION_ERRORS = {
-  1: { log: "rejected", show: "Cancelled." + RETRY },
-  2: { log: "rejected after an error", show: "Cancelled." + RETRY },
-  3: { log: "aborted by the system", show: "Recording was interrupted." + RETRY },
-  4: { log: "no speech detected", show: "Heard nothing." + RETRY },
-  5: { log: "no connectivity", show: "No connection to the phone or the internet." },
-  6: { log: "disabled for this account", show: "Voice dictation is disabled for this account." },
-  7: { log: "internal error", show: "Dictation broke internally." + RETRY },
-  8: { log: "recognizer failed", show: "Could not make out the words." + RETRY },
-};
-
 const render = new Poco(screen);
 const font = new render.Font("Gothic-Regular", 24);
 const background = render.makeColor(255, 255, 255);
@@ -206,24 +189,5 @@ new Button({
 
 // Drag to scroll, tracking the finger. The system dictation window owns the
 // screen while recording, so touches are only read between sessions.
-let dragFrom;
-
-const touch = new Touch({
-  onSample() {
-    const points = touch.sample();
-
-    if (listening || !points.length) {
-      dragFrom = undefined;
-      return;
-    }
-
-    const y = points[0].y;
-    if (dragFrom !== undefined) {
-      scrollByPixels(dragFrom - y);
-    }
-    dragFrom = y;
-  },
-});
-
 console.log("[watch] app start, screen " + render.width + "x" + render.height);
 listen();
