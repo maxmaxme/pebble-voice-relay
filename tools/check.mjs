@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import Module from "node:module";
 import wrap from "../src/embeddedjs/wrap.js";
+import gesture from "../src/embeddedjs/gesture.js";
 
 const require = createRequire(import.meta.url);
 
@@ -19,6 +20,15 @@ assert.deepEqual(wrap("a\nb", 10, measure), ["a", "b"]);
 assert.deepEqual(wrap("aaaaaaaa", 3, measure), ["aaa", "aaa", "aa"]);
 assert.deepEqual(wrap("hi aaaaaa", 3, measure), ["hi", "aaa", "aaa"]);
 assert.deepEqual(wrap("", 10, measure), [""]);
+
+/* --- gesture.js: a still press taps, a drag scrolls the opposite way --- */
+
+assert.deepEqual(gesture(0, 26, 12), { tap: true, lines: 0 });
+assert.deepEqual(gesture(-11, 26, 12), { tap: true, lines: 0 });
+// Dragging up by two lines moves the viewport two lines further down.
+assert.deepEqual(gesture(-52, 26, 12), { tap: false, lines: 2 });
+assert.deepEqual(gesture(52, 26, 12), { tap: false, lines: -2 });
+assert.deepEqual(gesture(26, 26, 12), { tap: false, lines: -1 });
 
 /* --- headers.js --- */
 

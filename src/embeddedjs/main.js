@@ -2,9 +2,13 @@ import Poco from "commodetto/Poco";
 import Dictation from "pebble/dictation";
 import Message from "pebble/message";
 import Button from "pebble/button";
+import Touch from "embedded:sensor/Touch/pebble";
 import wrap from "./wrap";
+import gesture from "./gesture";
 
 const PADDING = 6;
+// A press that wanders less than this many pixels counts as a tap.
+const TAP_SLOP = 12;
 
 const RETRY = "\n\nPress Select to talk again.";
 
@@ -157,6 +161,16 @@ function listen() {
   }
 }
 
+function scrollBy(byLines) {
+  const maxScroll = Math.max(0, lines.length - visibleLines);
+  const wanted = Math.min(maxScroll, Math.max(0, scroll + byLines));
+  if (wanted === scroll) {
+    return;
+  }
+  scroll = wanted;
+  draw();
+}
+
 new Button({
   types: ["up", "down", "select"],
   onPush(pushed, type) {
@@ -164,13 +178,45 @@ new Button({
       return;
     }
     if (type === "select") {
-      console.log("[watch] app start, screen " + render.width + "x" + render.height);
-listen();
+      listen();
       return;
     }
-    const maxScroll = Math.max(0, lines.length - visibleLines);
-    scroll = type === "up" ? Math.max(0, scroll - 1) : Math.min(maxScroll, scroll + 1);
-    draw();
+    scrollBy(type === "up" ? -1 : 1);
+  },
+});
+
+// Tap to talk, swipe to scroll. The system dictation window owns the screen
+// while recording, so gestures are only read between sessions.
+let touchOrigin;
+let touchLatest;
+
+const touch = new Touch({
+  onSample() {
+    const points = touch.sample();
+
+    if (listening) {
+      touchOrigin = undefined;
+      return;
+    }
+
+    if (points.length) {
+      touchLatest = points[0];
+      touchOrigin = touchOrigin ?? points[0];
+      return;
+    }
+
+    if (!touchOrigin) {
+      return;
+    }
+    const travelled = touchLatest.y - touchOrigin.y;
+    touchOrigin = undefined;
+
+    const move = gesture(travelled, lineHeight, TAP_SLOP);
+    if (move.tap) {
+      listen();
+    } else {
+      scrollBy(move.lines);
+    }
   },
 });
 

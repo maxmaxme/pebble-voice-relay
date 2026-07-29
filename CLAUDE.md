@@ -47,6 +47,10 @@ These were established by reading the PebbleOS firmware, not guessed:
 - **Button events reach the app while the system dictation window is open**, and
   that window uses Select to stop recording. Starting a second session there
   throws, so `main.js` guards with a `listening` flag.
+- **The touchscreen is reachable**, as `embedded:sensor/Touch/pebble` (not
+  `pebble/touch`). Subscribe with `onSample`, then `sample()` returns
+  `[{x, y, id}]` while a finger is down and `[]` on liftoff. It cannot stop a
+  recording, though — see the dictation-window note above.
 - **Piu is not built into the firmware** — only `piu/MC`. Text has to be drawn
   with Poco, hence `wrap.js`.
 - **A screenshot kills a running dictation.** The image travels over the same
