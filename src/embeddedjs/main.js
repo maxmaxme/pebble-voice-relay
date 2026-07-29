@@ -6,12 +6,19 @@ import wrap from "./wrap";
 
 const PADDING = 6;
 
+const RETRY = "\n\nPress Select to talk again.";
+
+// Keyed by DictationSessionStatus from the firmware. `log` names the status for
+// the console, `show` is what goes on the screen.
 const DICTATION_ERRORS = {
-  1: "Cancelled.\n\nPress Select to talk again.",
-  2: "Cancelled.\n\nPress Select to talk again.",
-  4: "Heard nothing.\n\nPress Select to talk again.",
-  5: "No connection to the phone or the internet.",
-  6: "Voice dictation is disabled for this account.",
+  1: { log: "rejected", show: "Cancelled." + RETRY },
+  2: { log: "rejected after an error", show: "Cancelled." + RETRY },
+  3: { log: "aborted by the system", show: "Recording was interrupted." + RETRY },
+  4: { log: "no speech detected", show: "Heard nothing." + RETRY },
+  5: { log: "no connectivity", show: "No connection to the phone or the internet." },
+  6: { log: "disabled for this account", show: "Voice dictation is disabled for this account." },
+  7: { log: "internal error", show: "Dictation broke internally." + RETRY },
+  8: { log: "recognizer failed", show: "Could not make out the words." + RETRY },
 };
 
 const render = new Poco(screen);
@@ -118,16 +125,16 @@ function listen() {
           // successful transcription, so losing focus later (a screenshot, a
           // notification) reports SystemAborted for a session already finished.
           // Acting on that would wipe the reply off the screen.
+          const known = DICTATION_ERRORS[status];
+          const name = known ? known.log : "unknown status " + status;
+
           if (!listening) {
-            console.log("[watch] ignoring dictation error " + status + ", not listening");
+            console.log("[watch] ignoring dictation error, not listening: " + name);
             return;
           }
           listening = false;
-          console.log("[watch] dictation error " + status);
-          show(
-            DICTATION_ERRORS[status] ??
-              "Dictation failed (" + status + ").\n\nPress Select to talk again."
-          );
+          console.log("[watch] dictation error: " + name);
+          show(known ? known.show : "Dictation failed (" + status + ")." + RETRY);
         },
       });
       dictation.configure({ confirm: false });
