@@ -10,7 +10,8 @@
   "scripts": {
     "check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/check.mjs",
     "build": "npm run check && .venv/bin/pebble build",
-    "install:watch": "npm run build && .venv/bin/pebble install --logs",
+    "install:watch": "npm run build && .venv/bin/pebble install --cloudpebble --logs",
+    "install:phone": "npm run build && .venv/bin/pebble install --phone \"$PEBBLE_PHONE\" --logs",
     "install:emulator": "npm run build && .venv/bin/pebble install --emulator emery",
     "logs": ".venv/bin/pebble logs",
     "setup": "python3 -m venv .venv && .venv/bin/pip install pebble-tool"

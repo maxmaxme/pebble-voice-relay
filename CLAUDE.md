@@ -18,12 +18,17 @@ watch, PebbleKit JS on the phone.
 ```sh
 npm run check            # tests
 npm run build            # tests, then pebble build
-npm run install:watch    # build, then install to the phone-paired watch with logs
+npm run install:watch    # build, then install via the CloudPebble connection, with logs
+npm run install:phone    # same, straight to PEBBLE_PHONE over the local network
 npm run setup            # recreate .venv with pebble-tool (first checkout only)
 ```
 
 `pebble` comes from this repo's own `.venv` — never call the one in the
 PebbleOS checkout.
+
+Always pass a connection flag. Bare `pebble install` fails with "No pebble
+connection specified" unless `PEBBLE_PHONE` / `PEBBLE_CLOUDPEBBLE` happens to be
+exported, which is not the case when the command runs from an IDE.
 
 ## Platform facts worth knowing
 
