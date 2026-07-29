@@ -3,3 +3,5 @@ node_modules/
 .venv/
 .lock-waf*
 *.pbw
+.DS_Store
+store/screen-*.png

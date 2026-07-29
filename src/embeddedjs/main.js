@@ -114,9 +114,20 @@ function listen() {
           flush();
         },
         onError(status) {
+          // The firmware leaves its result and focus subscriptions live after a
+          // successful transcription, so losing focus later (a screenshot, a
+          // notification) reports SystemAborted for a session already finished.
+          // Acting on that would wipe the reply off the screen.
+          if (!listening) {
+            console.log("[watch] ignoring dictation error " + status + ", not listening");
+            return;
+          }
           listening = false;
           console.log("[watch] dictation error " + status);
-          show(DICTATION_ERRORS[status] ?? "Dictation failed.\n\nPress Select to talk again.");
+          show(
+            DICTATION_ERRORS[status] ??
+              "Dictation failed (" + status + ").\n\nPress Select to talk again."
+          );
         },
       });
       dictation.configure({ confirm: false });
