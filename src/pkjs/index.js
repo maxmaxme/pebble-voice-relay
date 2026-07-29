@@ -4,77 +4,126 @@ var configPage = require('./config');
 
 var SETTINGS = 'voiceRelaySettings';
 
+// The watch's message module opens its outbound channel only after the phone
+// answers this handshake key; until then it cannot send anything.
+var HANDSHAKE = 15025;
+
+function log(message) {
+  console.log('[relay] ' + message);
+}
+
+/* Non-ASCII in a log line can be cut mid-character by the log buffer, which
+   crashes the libpebble2 log reader. Keep log payloads plain. */
+function safe(text, limit) {
+  return String(text).replace(/[^\x20-\x7e]/g, '.').slice(0, limit || 200);
+}
+
 function settings() {
   try {
     return JSON.parse(localStorage.getItem(SETTINGS)) || {};
   } catch (e) {
+    log('settings unreadable: ' + e.message);
     return {};
   }
 }
 
-function reply(text) {
+function send(key, text, what) {
   var payload = {};
-  payload[keys.reply] = text;
-  Pebble.sendAppMessage(payload);
-}
-
-function fail(text) {
-  var payload = {};
-  payload[keys.error] = text;
-  Pebble.sendAppMessage(payload);
+  payload[key] = text;
+  Pebble.sendAppMessage(payload, function () {
+    log(what + ' delivered to watch');
+  }, function (e) {
+    log(what + ' NOT delivered: ' + JSON.stringify(e));
+  });
 }
 
 function relay(text) {
   var config = settings();
+  log('transcript: ' + text.length + ' chars');
+
   if (!config.url) {
-    fail('No endpoint set.\n\nOpen app settings on the phone.');
+    log('no url configured');
+    send(keys.error, 'No endpoint set.\n\nOpen app settings on the phone.', 'error');
     return;
   }
+
+  var headers = parseHeaders(config.headers);
+  var names = Object.keys(headers);
+  log('POST ' + safe(config.url) + ' headers=' + (names.length ? safe(names.join(',')) : '(none)'));
 
   var xhr = new XMLHttpRequest();
   xhr.open('POST', config.url);
   xhr.timeout = 30000;
   xhr.setRequestHeader('Content-Type', 'application/json');
-
-  var headers = parseHeaders(config.headers);
   Object.keys(headers).forEach(function (name) {
     xhr.setRequestHeader(name, headers[name]);
   });
 
   xhr.onload = function () {
+    log('HTTP ' + xhr.status + ', ' + xhr.responseText.length + ' bytes');
     if (xhr.status < 200 || xhr.status >= 300) {
-      fail('HTTP ' + xhr.status);
+      log('body: ' + safe(xhr.responseText, 300));
+      send(keys.error, 'HTTP ' + xhr.status + '\n\n' + xhr.responseText.slice(0, 200), 'error');
       return;
     }
     try {
-      reply(JSON.parse(xhr.responseText).response || 'Empty response.');
+      send(keys.reply, JSON.parse(xhr.responseText).response || 'Empty response.', 'reply');
     } catch (e) {
-      fail('Response was not JSON.');
+      log('body was not JSON: ' + safe(xhr.responseText, 120));
+      send(keys.error, 'Response was not JSON.', 'error');
     }
   };
   xhr.ontimeout = function () {
-    fail('Request timed out.');
+    log('timed out after 30s');
+    send(keys.error, 'Request timed out.', 'error');
   };
   xhr.onerror = function () {
-    fail('Network error.');
+    log('network error (status ' + xhr.status + ')');
+    send(keys.error, 'Network error.', 'error');
   };
 
   xhr.send(JSON.stringify({ text: text }));
 }
 
+Pebble.addEventListener('ready', function () {
+  var config = settings();
+  log('ready, keys text=' + keys.text + ' reply=' + keys.reply + ' error=' + keys.error);
+  log(config.url ? 'endpoint: ' + safe(config.url) : 'no endpoint configured yet');
+});
+
 Pebble.addEventListener('appmessage', function (e) {
+  log('appmessage in: keys ' + Object.keys(e.payload).join(','));
+
+  if (e.payload[HANDSHAKE] !== undefined) {
+    var ack = {};
+    ack[HANDSHAKE] = 1;
+    Pebble.sendAppMessage(ack, function () {
+      log('handshake answered, watch can send now');
+    }, function (err) {
+      log('handshake answer failed: ' + JSON.stringify(err));
+    });
+    return;
+  }
+
   var text = e.payload.text || e.payload[keys.text];
   if (text) {
     relay(text);
+  } else {
+    log('no transcript in payload, ignoring');
   }
 });
 
 Pebble.addEventListener('showConfiguration', function () {
+  log('opening settings');
   Pebble.openURL(configPage(settings()));
 });
 
 Pebble.addEventListener('webviewclosed', function (e) {
-  if (e.response) {
-    localStorage.setItem(SETTINGS, decodeURIComponent(e.response));
+  if (!e.response) {
+    log('settings closed without saving');
+    return;
   }
+
+  localStorage.setItem(SETTINGS, decodeURIComponent(e.response));
+  log('settings saved: ' + safe(decodeURIComponent(e.response)));
 });
