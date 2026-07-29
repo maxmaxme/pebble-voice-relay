@@ -1,0 +1,61 @@
+# Voice Relay
+
+A Pebble watchapp: dictate on the watch, relay the transcript to an HTTP
+endpoint, show the reply. Written in JavaScript — Alloy (Moddable XS) on the
+watch, PebbleKit JS on the phone.
+
+## Layout
+
+- `src/embeddedjs/` — runs **on the watch** under Moddable XS. `main.js` is the
+  whole app; `wrap.js` is word-wrapping, kept pure so it can be tested.
+- `src/pkjs/` — runs **on the phone**. `index.js` does the HTTP call,
+  `config.js` builds the settings page, `headers.js` parses the header block.
+- `src/c/mdbl.c` — stock template glue that boots the JS machine. Do not edit.
+- `tools/check.mjs` — the test suite. Plain `node:assert`, no framework.
+
+## Commands
+
+```sh
+npm run check            # tests
+npm run build            # tests, then pebble build
+npm run install:watch    # build, then install to the phone-paired watch with logs
+npm run setup            # recreate .venv with pebble-tool (first checkout only)
+```
+
+`pebble` comes from this repo's own `.venv` — never call the one in the
+PebbleOS checkout.
+
+## Platform facts worth knowing
+
+These were established by reading the PebbleOS firmware, not guessed:
+
+- Target platform is **`emery`**, which is what obelix / Core 2 Duo builds
+  report as (`boards/obelix/defconfig` sets `CONFIG_PLATFORM_EMERY=y`).
+- **Apps cannot get raw microphone audio**, in C or in JS. The only microphone
+  API returns already-transcribed text, and recognition happens through the
+  phone.
+- **The message channel opens late.** The watch's `pebble/message` module posts
+  a handshake on key `15025` and calls `onWritable` only after the phone sends
+  something back. `src/pkjs/index.js` answers that handshake — without the
+  answer the watch can never send, and the app sits on "Waiting for the phone".
+- **Button events reach the app while the system dictation window is open**, and
+  that window uses Select to stop recording. Starting a second session there
+  throws, so `main.js` guards with a `listening` flag.
+- **Piu is not built into the firmware** — only `piu/MC`. Text has to be drawn
+  with Poco, hence `wrap.js`.
+- **Dictation cannot be tested in the emulator.** `dictation_session_start()`
+  with no phone attached closes the app outright; this happens with a plain C
+  app too. Test on hardware.
+
+## Logging
+
+`pebble install --logs` reads logs through libpebble2, which **crashes on
+non-ASCII cut mid-character** by the log buffer. Never log a transcript, a
+response body, or anything else user-supplied verbatim — pass it through
+`safe()` in `src/pkjs/index.js`, or log a length instead.
+
+## Style
+
+- Comments explain *why*, never *what*.
+- No dependencies. The settings page is a `data:` URI so nothing needs hosting;
+  header parsing is a few lines rather than a library.

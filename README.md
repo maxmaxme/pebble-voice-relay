@@ -28,6 +28,13 @@ In the Pebble phone app, open the app's settings:
 The settings page is generated locally as a `data:` URI, so there is nothing to
 host.
 
+**Test** posts the word `test` to the URL in the form, using the headers in the
+form, and prints the status and body below the button. It neither saves the
+settings nor involves the watch — the request goes straight from the phone's
+browser, so the endpoint has to allow cross-origin requests (send
+`Access-Control-Allow-Origin` and handle the `OPTIONS` preflight) for this to
+work. The watch's own requests are not subject to that.
+
 ## Endpoint contract
 
 ```

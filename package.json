@@ -2,21 +2,39 @@
   "name": "pebble-voice-relay",
   "author": "Maxim Lepekha",
   "version": "1.0.0",
-  "keywords": ["pebble-app"],
+  "keywords": [
+    "pebble-app"
+  ],
   "private": true,
   "dependencies": {},
+  "scripts": {
+    "check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/check.mjs",
+    "build": "npm run check && .venv/bin/pebble build",
+    "install:watch": "npm run build && .venv/bin/pebble install --logs",
+    "install:emulator": "npm run build && .venv/bin/pebble install --emulator emery",
+    "logs": ".venv/bin/pebble logs",
+    "setup": "python3 -m venv .venv && .venv/bin/pip install pebble-tool"
+  },
   "pebble": {
     "displayName": "Voice Relay",
     "uuid": "7af2fa7d-29df-419c-91fd-fdcd69b817b3",
     "projectType": "moddable",
     "sdkVersion": "3",
     "enableMultiJS": true,
-    "capabilities": ["configurable"],
-    "targetPlatforms": ["emery"],
+    "capabilities": [
+      "configurable"
+    ],
+    "targetPlatforms": [
+      "emery"
+    ],
     "watchapp": {
       "watchface": false
     },
-    "messageKeys": ["text", "reply", "error"],
+    "messageKeys": [
+      "text",
+      "reply",
+      "error"
+    ],
     "resources": {
       "media": []
     }
