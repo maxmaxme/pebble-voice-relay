@@ -20,6 +20,7 @@ npm run check            # tests
 npm run build            # tests, then pebble build
 npm run install:watch    # build, then install via the CloudPebble connection, with logs
 npm run install:phone    # same, straight to PEBBLE_PHONE over the local network
+npm run screenshot -- store/screen-reply.png   # grab the watch screen
 npm run setup            # recreate .venv with pebble-tool (first checkout only)
 ```
 
@@ -48,6 +49,11 @@ These were established by reading the PebbleOS firmware, not guessed:
   throws, so `main.js` guards with a `listening` flag.
 - **Piu is not built into the firmware** — only `piu/MC`. Text has to be drawn
   with Poco, hence `wrap.js`.
+- **A screenshot kills a running dictation.** The image travels over the same
+  Bluetooth link as the audio, so capturing mid-recording ends the session.
+  Worse, the firmware leaves its focus subscription live after a *successful*
+  transcription, so the capture reports SystemAborted for a session already
+  over — `main.js` ignores dictation errors that arrive while not listening.
 - **Dictation cannot be tested in the emulator.** `dictation_session_start()`
   with no phone attached closes the app outright; this happens with a plain C
   app too. Test on hardware.

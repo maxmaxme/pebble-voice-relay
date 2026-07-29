@@ -56,17 +56,17 @@ Any non-2xx status, a timeout (30 s), or a body that is not JSON with a
 ## Build
 
 ```bash
-pebble build
+npm run build            # tests, then compile
+npm run check            # tests only
+npm run install:watch    # compile and install over the CloudPebble connection
+npm run install:phone    # same, straight to PEBBLE_PHONE on the local network
 ```
 
-`pebble` comes from the PebbleOS repo's virtualenv
-(`pebbleos/.venv/bin/pebble`), which pulls its own SDK on first use.
-
-Run the self-checks for the word-wrap and header parsing:
-
-```bash
-node tools/check.mjs
-```
+`pebble` lives in this repo's own `.venv`; `npm run setup` recreates it on a
+fresh checkout, and the SDK downloads itself on first use. Always keep the
+connection flag the scripts pass — a bare `pebble install` exits with "No pebble
+connection specified" unless `PEBBLE_PHONE` or `PEBBLE_CLOUDPEBBLE` is exported,
+which will not be the case when the command runs from an IDE.
 
 ## Icons
 
@@ -94,20 +94,28 @@ paths. Screenshots are captured automatically from an emulator — including
 animated rollovers, which is why launching one takes a while. Nothing goes live
 until `--is-published` is passed, so a first run is safe to inspect.
 
-Note that emulator screenshots of this app will only ever show the idle screen:
-dictation cannot run without a phone.
+Emulator screenshots of this app only ever show the idle screen — dictation
+cannot run without a phone — so capture from the watch instead:
+
+```bash
+npm run screenshot -- store/screen-reply.png
+```
+
+Take it while a reply is on screen, not while recording: the image travels over
+the same Bluetooth link as the audio, so capturing mid-dictation ends the
+session.
 
 ## Testing
 
-The full flow needs real hardware with a connected phone: speech recognition
-runs through the phone, and the emulator has no phone. Calling
+`npm run check` covers the parts that can be tested off-device: word wrapping,
+header parsing, the settings page wiring, and every branch of the phone-side
+relay driven through fake host objects.
+
+The rest needs real hardware with a connected phone: speech recognition runs
+through the phone, and the emulator has none. Calling
 `dictation_session_start()` in the emulator closes the app outright — this
 happens with a plain C app too, so it is an emulator limitation rather than
 something in this code.
-
-```bash
-pebble install --phone <watch-ip>
-```
 
 ## What is deliberately not here
 

@@ -13,6 +13,7 @@
     "install:watch": "npm run build && .venv/bin/pebble install --cloudpebble --logs",
     "install:phone": "npm run build && .venv/bin/pebble install --phone \"$PEBBLE_PHONE\" --logs",
     "install:emulator": "npm run build && .venv/bin/pebble install --emulator emery",
+    "screenshot": ".venv/bin/pebble screenshot --cloudpebble",
     "logs": ".venv/bin/pebble logs",
     "setup": "python3 -m venv .venv && .venv/bin/pip install pebble-tool"
   },

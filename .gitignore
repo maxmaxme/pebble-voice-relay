@@ -5,3 +5,4 @@ node_modules/
 *.pbw
 .DS_Store
 store/screen-*.png
+pebble_screenshot_*.png
