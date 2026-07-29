@@ -1,5 +1,6 @@
 /* Self-checks for the logic worth checking. Run: node tools/check.mjs */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import Module from "node:module";
 import wrap from "../src/embeddedjs/wrap.js";
@@ -29,6 +30,23 @@ assert.deepEqual(parseHeaders("A: 1\nB: 2"), { A: "1", B: "2" });
 assert.deepEqual(parseHeaders("A: http://x:8080/y"), { A: "http://x:8080/y" });
 assert.deepEqual(parseHeaders("junk\n\n: novalue\nA: 1"), { A: "1" });
 assert.deepEqual(parseHeaders(undefined), {});
+
+/* --- main.js: it runs only on the watch, so at least catch dangling names.
+   A missing constant there is a fatal TypeError that kills the app. --- */
+
+const watchSource = readFileSync(new URL("../src/embeddedjs/main.js", import.meta.url), "utf8");
+const declared = new Set(
+  [...watchSource.matchAll(/(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1])
+);
+const imported = new Set([...watchSource.matchAll(/import\s+(\w+)/g)].map((m) => m[1]));
+const shouty = new Set([...watchSource.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)].map((m) => m[1]));
+
+for (const name of shouty) {
+  assert.ok(
+    declared.has(name) || imported.has(name),
+    "main.js uses " + name + " without declaring it"
+  );
+}
 
 /* --- trim.js: the inbox budget is bytes, strings are UTF-16 --- */
 

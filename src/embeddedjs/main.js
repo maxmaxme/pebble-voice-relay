@@ -5,6 +5,22 @@ import Button from "pebble/button";
 import wrap from "./wrap";
 
 const PADDING = 6;
+
+const RETRY = "\n\nPress Select to talk again.";
+
+// Keyed by DictationSessionStatus from the firmware. `log` names the status for
+// the console, `show` is what goes on the screen.
+const DICTATION_ERRORS = {
+  1: { log: "rejected", show: "Cancelled." + RETRY },
+  2: { log: "rejected after an error", show: "Cancelled." + RETRY },
+  3: { log: "aborted by the system", show: "Recording was interrupted." + RETRY },
+  4: { log: "no speech detected", show: "Heard nothing." + RETRY },
+  5: { log: "no connectivity", show: "No connection to the phone or the internet." },
+  6: { log: "disabled for this account", show: "Voice dictation is disabled for this account." },
+  7: { log: "internal error", show: "Dictation broke internally." + RETRY },
+  8: { log: "recognizer failed", show: "Could not make out the words." + RETRY },
+};
+
 const render = new Poco(screen);
 const font = new render.Font("Gothic-Regular", 24);
 const background = render.makeColor(255, 255, 255);
@@ -51,10 +67,13 @@ function scrollByPixels(delta) {
 }
 
 function show(text) {
+  // Coerce: an unhandled TypeError in here takes the whole app down, and a
+  // caller passing undefined should show something instead of dying.
+  const safe = typeof text === "string" ? text : String(text);
   // Release the previous wrap before building the next one: both alive at once
   // is the peak that runs the JS heap out on a long reply.
   lines = [];
-  lines = wrap(text, render.width - 2 * PADDING, (s) => render.getTextWidth(s, font));
+  lines = wrap(safe, render.width - 2 * PADDING, (s) => render.getTextWidth(s, font));
   scrollTop = 0;
   draw();
 }
