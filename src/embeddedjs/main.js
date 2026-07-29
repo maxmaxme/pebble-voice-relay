@@ -42,7 +42,14 @@ function show(text) {
 }
 
 function flush() {
-  if (!writable || pending === undefined) {
+  if (pending === undefined) {
+    return;
+  }
+  // The channel only opens once the phone answers the module's handshake, so a
+  // transcript can be queued before anything can be sent.
+  if (!writable) {
+    console.log("[watch] channel not open yet, transcript queued");
+    show("Waiting for the phone...");
     return;
   }
   const text = pending;
@@ -50,7 +57,10 @@ function flush() {
   writable = false;
   try {
     message.write(new Map([["text", text]]));
+    console.log("[watch] sent " + text.length + " chars to the phone");
+    show("Sending...");
   } catch (e) {
+    console.log("[watch] write failed: " + e.message);
     show("Could not reach the phone.");
   }
 }
@@ -61,49 +71,72 @@ const message = new Message({
   output: 640,
   onReadable() {
     const payload = message.read();
-    show(payload.get("reply") ?? payload.get("error") ?? "Empty response.");
+    const reply = payload.get("reply");
+    const error = payload.get("error");
+    console.log("[watch] got " + (reply ? "reply" : error ? "error" : "nothing"));
+    show(reply ?? error ?? "Empty response.");
   },
   onWritable() {
+    console.log("[watch] channel open");
     writable = true;
     flush();
   },
   onSuspend() {
+    console.log("[watch] channel suspended");
     writable = false;
   },
 });
 
 let dictation;
+let listening = false;
 
 // The session only exists while the phone is reachable, so it is created
 // lazily and retried on every Select press.
 function listen() {
+  // Button events still arrive while the system's dictation window is up, and
+  // that window uses Select to stop recording — starting again there throws.
+  if (listening) {
+    return;
+  }
+
   if (!dictation) {
     try {
       dictation = new Dictation({
         byteLength: 512,
         onReadable() {
+          listening = false;
           const text = dictation.read();
+          console.log("[watch] transcript: " + (text ? text.length + " chars" : "empty"));
           if (!text) {
             return;
           }
-          show("Sending...");
           pending = text;
           flush();
         },
         onError(status) {
+          listening = false;
+          console.log("[watch] dictation error " + status);
           show(DICTATION_ERRORS[status] ?? "Dictation failed.\n\nPress Select to talk again.");
         },
       });
       dictation.configure({ confirm: false });
     } catch (e) {
       dictation = undefined;
+      console.log("[watch] cannot create session: " + e.message);
       show("Dictation is unavailable.\n\nCheck the phone connection, then press Select.");
       return;
     }
   }
 
   show("Listening...");
-  dictation.start();
+  try {
+    dictation.start();
+    listening = true;
+    console.log("[watch] listening");
+  } catch (e) {
+    console.log("[watch] start failed: " + e.message);
+    show("Could not start listening.\n\nPress Select to try again.");
+  }
 }
 
 new Button({
@@ -113,7 +146,8 @@ new Button({
       return;
     }
     if (type === "select") {
-      listen();
+      console.log("[watch] app start, screen " + render.width + "x" + render.height);
+listen();
       return;
     }
     const maxScroll = Math.max(0, lines.length - visibleLines);
@@ -122,4 +156,5 @@ new Button({
   },
 });
 
+console.log("[watch] app start, screen " + render.width + "x" + render.height);
 listen();
