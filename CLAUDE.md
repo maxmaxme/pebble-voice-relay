@@ -10,7 +10,8 @@ watch, PebbleKit JS on the phone.
   whole app; `wrap.js` is word-wrapping, kept pure so it can be tested.
 - `src/pkjs/` — runs **on the phone**. `index.js` does the HTTP call,
   `config.js` builds the settings page, `headers.js` parses the header block.
-- `src/c/mdbl.c` — stock template glue that boots the JS machine. Do not edit.
+- `src/c/mdbl.c` — glue that boots the JS machine. Only the memory sizes in it
+  are ours; the rest is the stock template.
 - `tools/check.mjs` — the test suite. Plain `node:assert`, no framework.
 
 ## Commands
@@ -51,6 +52,12 @@ These were established by reading the PebbleOS firmware, not guessed:
   `pebble/touch`). Subscribe with `onSample`, then `sample()` returns
   `[{x, y, id}]` while a finger is down and `[]` on liftoff. It cannot stop a
   recording, though — see the dictation-window note above.
+- **The JS machine's default 32K static block is too small** for a reply of a
+  few kilobytes plus the wrapped lines drawn from it — XS dies with `fxAbort
+  memory full`, which no JS `try` can catch. `mdbl.c` asks for a bigger machine
+  through `ModdableCreationRecord`; going over the static block makes the
+  runtime allocate from the app heap, and it never grows after that, so the
+  sizes must carry headroom.
 - **Piu is not built into the firmware** — only `piu/MC`. Text has to be drawn
   with Poco, hence `wrap.js`.
 - **A screenshot kills a running dictation.** The image travels over the same

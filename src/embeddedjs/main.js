@@ -47,6 +47,9 @@ function draw() {
 }
 
 function show(text) {
+  // Release the previous wrap before building the next one: both alive at once
+  // is the peak that runs the JS heap out on a long reply.
+  lines = [];
   lines = wrap(text, render.width - 2 * PADDING, (s) => render.getTextWidth(s, font));
   scroll = 0;
   draw();
