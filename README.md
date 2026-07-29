@@ -68,6 +68,35 @@ Run the self-checks for the word-wrap and header parsing:
 node tools/check.mjs
 ```
 
+## Icons
+
+`tools/make-icons.py` draws all of them, so the shape is edited in one place:
+
+```bash
+.venv/bin/python tools/make-icons.py
+```
+
+- `resources/images/menu-icon.png` — 25×25, launcher icon. Pebble uses it as a
+  mask, so the script snaps it to fully opaque or fully transparent pixels.
+- `store/icon-80.png`, `store/icon-144.png` — the two sizes the appstore wants.
+
+## Publishing
+
+The store lives at `appstore-api.repebble.com` and the CLI talks to it:
+
+```bash
+.venv/bin/pebble login
+.venv/bin/pebble publish --icon-small store/icon-80.png --icon-large store/icon-144.png
+```
+
+Run without arguments and it prompts for name, description, category and icon
+paths. Screenshots are captured automatically from an emulator — including
+animated rollovers, which is why launching one takes a while. Nothing goes live
+until `--is-published` is passed, so a first run is safe to inspect.
+
+Note that emulator screenshots of this app will only ever show the idle screen:
+dictation cannot run without a phone.
+
 ## Testing
 
 The full flow needs real hardware with a connected phone: speech recognition
