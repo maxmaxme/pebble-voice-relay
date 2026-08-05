@@ -191,8 +191,33 @@ function configure(app, url) {
   assert.equal(Xhr.calls[0].url, "https://example.com/voice");
   assert.equal(Xhr.calls[0].headers["Content-Type"], "application/json");
   assert.equal(Xhr.calls[0].headers.Authorization, "Bearer t");
-  assert.deepEqual(JSON.parse(Xhr.calls[0].body), { text: "привет" });
+  assert.equal(JSON.parse(Xhr.calls[0].body).text, "привет");
   assert.deepEqual(app.sent[0], { [KEYS.reply]: "hi there" });
+}
+
+/* Every dictation in one app run carries the same conversation id, so the
+   endpoint can chain the turns; a relaunch starts a new one. */
+{
+  const Xhr = fakeXhr({ status: 200, body: JSON.stringify({ response: "ok" }) });
+  const app = loadPkjs(Xhr);
+  configure(app, "https://example.com/voice");
+  app.fire("appmessage", { payload: { 10000: "first" } });
+  app.fire("appmessage", { payload: { 10000: "second" } });
+
+  const ids = Xhr.calls.map((c) => JSON.parse(c.body).conversation_id);
+  assert.equal(typeof ids[0], "string");
+  assert.ok(ids[0].length > 0, "conversation id must not be empty");
+  assert.equal(ids[0], ids[1], "one conversation per app run");
+
+  const relaunched = fakeXhr({ status: 200, body: JSON.stringify({ response: "ok" }) });
+  const app2 = loadPkjs(relaunched);
+  configure(app2, "https://example.com/voice");
+  app2.fire("appmessage", { payload: { 10000: "third" } });
+  assert.notEqual(
+    JSON.parse(relaunched.calls[0].body).conversation_id,
+    ids[0],
+    "a relaunch must start a new conversation"
+  );
 }
 
 // A non-2xx reply carries the server's own explanation to the watch.

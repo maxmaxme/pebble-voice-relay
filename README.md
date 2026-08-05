@@ -35,7 +35,7 @@ and nothing is sent anywhere except the address you enter.
 
 1. Launching the app starts dictation immediately.
 2. **Select** ends the recording; the phone-side JS gets the transcript.
-3. The phone POSTs `{"text": "..."}` to your endpoint with your headers.
+3. The phone POSTs `{"text": "...", "conversation_id": "..."}` to your endpoint with your headers.
 4. The endpoint answers `{"response": "..."}` and the text appears on the watch.
 
 **Select** speaks again. **Up/Down** scroll a page at a time. **Back** exits.
@@ -68,13 +68,17 @@ POST <your url>
 Content-Type: application/json
 <your headers>
 
-{"text": "what the watch heard"}
+{"text": "what the watch heard", "conversation_id": "pebble-…"}
 ```
 
 ```http
 200 OK
 {"response": "what to show on the watch"}
 ```
+
+`conversation_id` is minted once per app launch and repeated on every dictation
+of that run. An endpoint that keeps a conversation per id can answer a follow-up
+("yes, send it") in context; one that doesn't care can ignore the field.
 
 Any non-2xx status, a timeout (30 s), or a body that is not JSON with a
 `response` field shows an error on the watch instead — along with whatever the

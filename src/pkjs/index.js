@@ -31,6 +31,14 @@ function settings() {
 // The watch opens an 8K inbox; leave room for the dictionary framing.
 var MAX_REPLY_BYTES = 8000;
 
+/* One conversation per app launch. The endpoint chains turns that share an id,
+   so a follow-up dictation ("yes, send it") is understood instead of arriving
+   context-free, while relaunching the app drops a stale topic. PebbleKit JS
+   starts and dies with the watchapp, so a module-level value is exactly that
+   lifetime. */
+var conversationId =
+  'pebble-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
+
 function send(key, text, what) {
   var payload = {};
   payload[key] = trim(text, MAX_REPLY_BYTES);
@@ -89,7 +97,7 @@ function relay(text) {
     send(keys.error, 'Network error.', 'error');
   };
 
-  xhr.send(JSON.stringify({ text: text }));
+  xhr.send(JSON.stringify({ text: text, conversation_id: conversationId }));
 }
 
 Pebble.addEventListener('ready', function () {

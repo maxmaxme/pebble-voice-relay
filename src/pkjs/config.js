@@ -12,7 +12,9 @@ module.exports = function configPage(saved) {
     'padding:8px;margin-top:12px;font:13px ui-monospace,monospace}</style>' +
     '<label for="url">Endpoint URL</label>' +
     '<input id="url" type="url" placeholder="https://example.com/voice">' +
-    '<p>Receives <code>{"text": "..."}</code>, must answer <code>{"response": "..."}</code>.</p>' +
+    '<p>Receives <code>{"text": "...", "conversation_id": "..."}</code>, must answer ' +
+    '<code>{"response": "..."}</code>. The id is the same for every dictation in one app ' +
+    'run, so an endpoint that understands it can chain follow-ups; others can ignore it.</p>' +
     '<label for="headers">Headers</label>' +
     '<textarea id="headers" rows="5" placeholder="Authorization: Bearer ..."></textarea>' +
     '<p>One per line, <code>Name: value</code>.</p>' +
