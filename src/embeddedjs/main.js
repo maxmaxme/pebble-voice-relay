@@ -6,6 +6,11 @@ import wrap from "./wrap";
 
 const PADDING = 6;
 
+// The only Gothic sizes the firmware ships; asking for any other one fails to
+// load the font, which takes the app down.
+const SIZES = [14, 18, 24, 28, 36];
+const DEFAULT_SIZE = 24;
+
 const RETRY = "\n\nPress Select to talk again.";
 
 // Keyed by DictationSessionStatus from the firmware. `log` names the status for
@@ -22,21 +27,46 @@ const DICTATION_ERRORS = {
 };
 
 const render = new Poco(screen);
-const font = new render.Font("Gothic-Regular", 24);
 const background = render.makeColor(255, 255, 255);
 const foreground = render.makeColor(0, 0, 0);
-const lineHeight = font.height + 2;
-const visibleLines = Math.floor((render.height - 2 * PADDING) / lineHeight);
 
-let lines = [];
+let fontSize;
+let font;
+let lineHeight;
+let visibleLines;
+// A page, less one line of overlap so nothing is skipped between presses.
+let pageHeight;
+
+function setSize(size) {
+  if (size === fontSize || SIZES.indexOf(size) < 0) {
+    return;
+  }
+  fontSize = size;
+  font = new render.Font("Gothic-Regular", size);
+  lineHeight = font.height + 2;
+  visibleLines = Math.floor((render.height - 2 * PADDING) / lineHeight);
+  pageHeight = Math.max(1, visibleLines - 1) * lineHeight;
+}
+
+setSize(DEFAULT_SIZE);
+
+// The text on screen, plus where wrap() cut it. Keeping the cuts as indices
+// into `body` rather than as substrings is what lets a long reply fit: only
+// the handful of lines being drawn is ever a string.
+let body = "";
+let spans = new Uint16Array(0);
 // Scrolling is tracked in pixels rather than lines so a drag can follow the
 // finger instead of snapping a line at a time.
 let scrollTop = 0;
 let pending;
 let writable = false;
 
+function lineCount() {
+  return spans.length / 2;
+}
+
 function maxScrollTop() {
-  return Math.max(0, lines.length * lineHeight + 2 * PADDING - render.height);
+  return Math.max(0, lineCount() * lineHeight + 2 * PADDING - render.height);
 }
 
 function draw() {
@@ -45,12 +75,14 @@ function draw() {
 
   const first = Math.floor(scrollTop / lineHeight);
   const offset = PADDING - (scrollTop % lineHeight);
+  const count = lineCount();
   // One extra line, since the top and bottom ones are usually half-visible.
   for (let i = 0; i <= visibleLines; i++) {
-    const line = lines[first + i];
-    if (line === undefined) {
+    const index = first + i;
+    if (index >= count) {
       break;
     }
+    const line = body.slice(spans[2 * index], spans[2 * index + 1]);
     render.drawText(line, font, foreground, PADDING, offset + i * lineHeight);
   }
 
@@ -69,11 +101,11 @@ function scrollByPixels(delta) {
 function show(text) {
   // Coerce: an unhandled TypeError in here takes the whole app down, and a
   // caller passing undefined should show something instead of dying.
-  const safe = typeof text === "string" ? text : String(text);
+  body = typeof text === "string" ? text : String(text);
   // Release the previous wrap before building the next one: both alive at once
   // is the peak that runs the JS heap out on a long reply.
-  lines = [];
-  lines = wrap(safe, render.width - 2 * PADDING, (s) => render.getTextWidth(s, font));
+  spans = new Uint16Array(0);
+  spans = wrap(body, render.width - 2 * PADDING, (s) => render.getTextWidth(s, font));
   scrollTop = 0;
   draw();
 }
@@ -103,7 +135,7 @@ function flush() {
 }
 
 const message = new Message({
-  keys: ["text", "reply", "error"],
+  keys: ["text", "reply", "error", "size"],
   // Replies are prose and easily outgrow a small buffer; the firmware allows up
   // to 8K per message, and anything larger is trimmed phone-side.
   input: 8192,
@@ -113,6 +145,7 @@ const message = new Message({
     const reply = payload.get("reply");
     const error = payload.get("error");
     console.log("[watch] got " + (reply ? "reply" : error ? "error" : "nothing"));
+    setSize(payload.get("size"));
     show(reply ?? error ?? "Empty response.");
   },
   onWritable() {
@@ -189,9 +222,6 @@ function listen() {
   }
 }
 
-// A page, less one line of overlap so nothing is skipped between presses.
-const PAGE = Math.max(1, visibleLines - 1) * lineHeight;
-
 new Button({
   types: ["up", "down", "select"],
   onPush(pushed, type) {
@@ -202,7 +232,7 @@ new Button({
       listen();
       return;
     }
-    scrollByPixels(type === "up" ? -PAGE : PAGE);
+    scrollByPixels(type === "up" ? -pageHeight : pageHeight);
   },
 });
 

@@ -13,6 +13,10 @@ watch, PebbleKit JS on the phone.
 - `src/c/mdbl.c` — glue that boots the JS machine. Only the memory sizes in it
   are ours; the rest is the stock template.
 - `tools/check.mjs` — the test suite. Plain `node:assert`, no framework.
+- `tools/gothic-preview.mjs` — regenerates `src/pkjs/preview.js`, the settings
+  page's text-size samples, by rendering them with the firmware's own Gothic
+  glyphs out of a `pebbleos` checkout. Run it only when the sample text or the
+  offered sizes change; the output is committed.
 
 ## Commands
 
@@ -64,7 +68,22 @@ These were established by reading the PebbleOS firmware, not guessed:
   memory full`, which no JS `try` can catch. `mdbl.c` asks for a bigger machine
   through `ModdableCreationRecord`; going over the static block makes the
   runtime allocate from the app heap, and it never grows after that, so the
-  sizes must carry headroom.
+  sizes must carry headroom. `moddable.c` is explicit about it: ask for more
+  than `staticSize` and it sets `incrementalChunkSize` and
+  `incrementalHeapCount` to zero.
+- **Every element of a normal array costs a slot**, and a slot is 16 bytes
+  (`xs.h`: `void *data[4]`), so `JS_SLOT_BYTES` 24K is 1536 slots for the whole
+  program. That is why `wrap.js` returns a `Uint16Array` of start/end indices
+  instead of substrings: a typed array lives in one chunk and costs one slot no
+  matter how many lines it holds, and only the handful of lines being drawn is
+  ever cut out of the text. The older string version died on an 8K reply at any
+  font size — `split(" ")` alone held 1121 substrings alive at once, several
+  times more than the wrapped lines it produced. Measured on hardware after the
+  change: 8000 bytes at 36px wraps to 640 lines and draws.
+- **The RAM budget is knowable, not guesswork.** `Kconfig`
+  (`APP_RAM_EMERY_SEGMENT_SIZE`) gives emery 135168 bytes, and `app_manager.c`
+  hands a Moddable app 4096 fewer, so 128K; `pebble build` prints what is left
+  (`Free RAM available (heap)`).
 - **Piu is not built into the firmware** — only `piu/MC`. Text has to be drawn
   with Poco, hence `wrap.js`.
 - **A screenshot kills a running dictation.** The image travels over the same
@@ -78,16 +97,17 @@ These were established by reading the PebbleOS firmware, not guessed:
 
 ## Logging
 
-**`console.log` from the watch-side mod does not reach `pebble logs`** — only
-PebbleKit JS output (`pkjs>`) and firmware lines show up. The mod's console goes
-to `APP_LOG(APP_LOG_LEVEL_DEBUG_VERBOSE)` (`xs/platforms/pebble/xsHost.c`), which
-travels as an `AppLogMessage` on endpoint 2006 — a different path from both the
-phone's own logging and the firmware's `PBL_LOG`. The tool does ask for it
-(`AppLogShippingControl(enable=True)`), so the gap is somewhere in the phone
-bridge; `--phone <ip>` is worth a try before concluding the log is lost.
+**`console.log` from the watch-side mod does reach `pebble logs`**, at least
+over `--cloudpebble`, tagged with its origin rather than `pkjs>`:
 
-Until that works, diagnose on the watch by drawing with `show()` — log lines
-from `src/embeddedjs/` are effectively write-only.
+```
+[18:55:57] xsHost.c:141> [watch] channel open
+```
+
+It travels as an `AppLogMessage` on endpoint 2006, a different path from the
+phone's own logging, so only lines logged after the tool attaches show up —
+anything printed during app start is gone by the time logs connect. For that
+window, draw with `show()` instead.
 
 That same path caps a log line at 90 bytes (`gTransmitBuffer`), splitting it
 mid-character, which is exactly what crashes the libpebble2 reader on Cyrillic.
