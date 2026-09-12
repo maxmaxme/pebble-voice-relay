@@ -73,8 +73,12 @@ Content-Type: application/json
 
 ```http
 200 OK
-{"response": "what to show on the watch"}
+{"response": "what to show on the watch", "size": 24}
 ```
+
+`size` is optional and overrides the text size from the settings page for that
+one reply. The firmware ships Gothic in 14, 18, 24, 28 and 36 only; any other
+number is rounded up to the nearest of those.
 
 `conversation_id` is minted once per app launch and repeated on every dictation
 of that run. An endpoint that keeps a conversation per id can answer a follow-up
@@ -105,6 +109,11 @@ not be the case when the command runs from an IDE.
 `npm run check` covers what can be tested off-device: word wrapping, header
 parsing, the settings page wiring, and every branch of the phone-side relay
 driven through fake host objects.
+
+The text-size samples on the settings page are drawn with the watch's own font,
+read straight out of the firmware's `GOTHIC_*.pbf` resources — the phone has no
+copy of it, and approximating it with the phone's own sans came out half again
+too wide. `node tools/gothic-preview.mjs <pebbleos checkout>` regenerates them.
 
 The rest needs real hardware with a connected phone: speech recognition runs
 through the phone, and the emulator has none. Calling

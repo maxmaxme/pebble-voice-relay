@@ -31,6 +31,26 @@ function settings() {
 // The watch opens an 8K inbox; leave room for the dictionary framing.
 var MAX_REPLY_BYTES = 8000;
 
+/* The firmware ships Gothic in these sizes only, and the watch ignores anything
+   else outright. Rounding an endpoint's number up to one of them turns a size
+   that would do nothing into the nearest one that does something — up, because
+   anyone asking for a size at all is asking to read it more easily. */
+var SIZES = [14, 18, 24, 28, 36];
+var DEFAULT_SIZE = 24;
+
+function snapSize(value) {
+  var wanted = Number(value);
+  if (!wanted) {
+    return 0;
+  }
+  for (var i = 0; i < SIZES.length; i++) {
+    if (SIZES[i] >= wanted) {
+      return SIZES[i];
+    }
+  }
+  return SIZES[SIZES.length - 1];
+}
+
 /* One conversation per app launch. The endpoint chains turns that share an id,
    so a follow-up dictation ("yes, send it") is understood instead of arriving
    context-free, while relaunching the app drops a stale topic. PebbleKit JS
@@ -39,9 +59,10 @@ var MAX_REPLY_BYTES = 8000;
 var conversationId =
   'pebble-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
 
-function send(key, text, what) {
+function send(key, text, what, size) {
   var payload = {};
   payload[key] = trim(text, MAX_REPLY_BYTES);
+  payload[keys.size] = size || snapSize(settings().size) || DEFAULT_SIZE;
   Pebble.sendAppMessage(payload, function () {
     log(what + ' delivered to watch');
   }, function (e) {
@@ -82,7 +103,8 @@ function relay(text) {
       return;
     }
     try {
-      send(keys.reply, JSON.parse(xhr.responseText).response || 'Empty response.', 'reply');
+      var body = JSON.parse(xhr.responseText);
+      send(keys.reply, body.response || 'Empty response.', 'reply', snapSize(body.size));
     } catch (e) {
       log('body was not JSON: ' + safe(xhr.responseText, 120));
       send(keys.error, 'Response was not JSON.', 'error');
@@ -130,7 +152,12 @@ Pebble.addEventListener('appmessage', function (e) {
 
 Pebble.addEventListener('showConfiguration', function () {
   log('opening settings');
-  Pebble.openURL(configPage(settings()));
+  var config = settings();
+  // Snap rather than default: a size saved when the shipped list was different
+  // still picks the nearest one the page can show, and the picker is never
+  // handed a value none of its options carry.
+  config.size = snapSize(config.size) || DEFAULT_SIZE;
+  Pebble.openURL(configPage(config));
 });
 
 Pebble.addEventListener('webviewclosed', function (e) {

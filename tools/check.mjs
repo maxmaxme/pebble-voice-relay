@@ -14,12 +14,47 @@ const report = console.log.bind(console);
 
 const measure = (s) => s.length;
 
-assert.deepEqual(wrap("hello", 10, measure), ["hello"]);
-assert.deepEqual(wrap("hello there world", 11, measure), ["hello there", "world"]);
-assert.deepEqual(wrap("a\nb", 10, measure), ["a", "b"]);
-assert.deepEqual(wrap("aaaaaaaa", 3, measure), ["aaa", "aaa", "aa"]);
-assert.deepEqual(wrap("hi aaaaaa", 3, measure), ["hi", "aaa", "aaa"]);
-assert.deepEqual(wrap("", 10, measure), [""]);
+// wrap() returns index pairs; cutting them is the watch's job, and the test's.
+function lines(text, width) {
+  const spans = wrap(text, width, measure);
+  const out = [];
+  for (let i = 0; i < spans.length; i += 2) {
+    out.push(text.slice(spans[i], spans[i + 1]));
+  }
+  return out;
+}
+
+assert.deepEqual(lines("hello", 10), ["hello"]);
+assert.deepEqual(lines("hello there world", 11), ["hello there", "world"]);
+assert.deepEqual(lines("a\nb", 10), ["a", "b"]);
+assert.deepEqual(lines("aaaaaaaa", 3), ["aaa", "aaa", "aa"]);
+assert.deepEqual(lines("hi aaaaaa", 3), ["hi", "aaa", "aaa"]);
+assert.deepEqual(lines("", 10), [""]);
+assert.deepEqual(lines("a\n\nb", 10), ["a", "", "b"], "a blank line must survive");
+
+/* The whole point of the index pairs: no per-line string, and no array of
+   words either. An 8K reply used to hold over a thousand substrings alive at
+   once, which is what killed the app on the watch. */
+{
+  const long = "lorem ipsum dolor sit amet consectetur adipiscing ".repeat(160);
+  const spans = wrap(long, 188, (s) => s.length * 6);
+  assert.ok(spans instanceof Uint16Array, "wrap must not go back to returning strings");
+  assert.equal(spans.length % 2, 0, "spans come in start/end pairs");
+  assert.ok(spans.length / 2 > 200, "the sample must actually wrap to many lines");
+  // Spans are Uint16: past 65535 the indices would wrap and point at the wrong
+  // characters, so the tail is dropped instead.
+  const huge = "word ".repeat(14000);
+  const capped = wrap(huge, 40, (s) => s.length);
+  for (let i = 0; i < capped.length; i += 2) {
+    assert.ok(capped[i] <= capped[i + 1], "no span may run backwards");
+  }
+  assert.ok(capped[capped.length - 1] <= 65535, "no span may address past the Uint16 limit");
+  // Every line has to be reconstructible and within the budget.
+  for (let i = 0; i < spans.length; i += 2) {
+    assert.ok(spans[i] <= spans[i + 1], "a span must not run backwards");
+    assert.ok(long.slice(spans[i], spans[i + 1]).length * 6 <= 188 || spans[i + 1] - spans[i] <= 1);
+  }
+}
 
 /* --- headers.js --- */
 
@@ -74,13 +109,16 @@ assert.match(page, /fetch\(/, "Test must post from the page itself");
 assert.doesNotMatch(page, /close\(true\)/, "Test must not close the settings page");
 assert.match(page, /pebblejs:\/\/close#/, "Save must hand settings back to pkjs");
 assert.match(page, /"https:\/\/x\/y"/, "saved url must be prefilled");
+assert.match(page, /previews\[size\.value\]/, "the preview must follow the picked size");
+assert.match(page, /size: Number\(size\.value\)/, "Save must hand the size back to pkjs");
 
 /* --- pkjs/index.js: the branchy part, driven through fake host objects --- */
 
-const KEYS = { text: 10000, reply: 10001, error: 10002 };
+const KEYS = { text: 10000, reply: 10001, error: 10002, size: 10003 };
 
 function loadPkjs(xhrFactory, { nack = false } = {}) {
   const sent = [];
+  const opened = [];
   const logged = [];
   const listeners = {};
   const store = {};
@@ -111,7 +149,9 @@ function loadPkjs(xhrFactory, { nack = false } = {}) {
           ok?.();
         }
       },
-      openURL: () => {},
+      openURL: (url) => {
+        opened.push(url);
+      },
     },
   };
 
@@ -126,7 +166,7 @@ function loadPkjs(xhrFactory, { nack = false } = {}) {
     Module._load = realLoad;
   }
 
-  return { sent, logged, fire: (event, e) => listeners[event](e), store };
+  return { sent, opened, logged, fire: (event, e) => listeners[event](e), store };
 }
 
 function fakeXhr({ status, body, fail }) {
@@ -157,9 +197,11 @@ function fakeXhr({ status, body, fail }) {
   return Xhr;
 }
 
-function configure(app, url) {
+function configure(app, url, size) {
   app.fire("webviewclosed", {
-    response: encodeURIComponent(JSON.stringify({ url, headers: "Authorization: Bearer t" })),
+    response: encodeURIComponent(
+      JSON.stringify({ url, headers: "Authorization: Bearer t", size })
+    ),
   });
 }
 
@@ -192,7 +234,7 @@ function configure(app, url) {
   assert.equal(Xhr.calls[0].headers["Content-Type"], "application/json");
   assert.equal(Xhr.calls[0].headers.Authorization, "Bearer t");
   assert.equal(JSON.parse(Xhr.calls[0].body).text, "привет");
-  assert.deepEqual(app.sent[0], { [KEYS.reply]: "hi there" });
+  assert.deepEqual(app.sent[0], { [KEYS.reply]: "hi there", [KEYS.size]: 24 });
 }
 
 /* Every dictation in one app run carries the same conversation id, so the
@@ -236,7 +278,7 @@ function configure(app, url) {
   const app = loadPkjs(fakeXhr({ status: 200, body: "<html>nope</html>" }));
   configure(app, "https://example.com/voice");
   app.fire("appmessage", { payload: { 10000: "hello" } });
-  assert.deepEqual(app.sent[0], { [KEYS.error]: "Response was not JSON." });
+  assert.deepEqual(app.sent[0], { [KEYS.error]: "Response was not JSON.", [KEYS.size]: 24 });
 }
 
 // A transport failure is reported rather than swallowed.
@@ -244,7 +286,7 @@ function configure(app, url) {
   const app = loadPkjs(fakeXhr({ fail: true }));
   configure(app, "https://example.com/voice");
   app.fire("appmessage", { payload: { 10000: "hello" } });
-  assert.deepEqual(app.sent[0], { [KEYS.error]: "Network error." });
+  assert.deepEqual(app.sent[0], { [KEYS.error]: "Network error.", [KEYS.size]: 24 });
 }
 
 // A reply too long for the watch inbox is trimmed rather than dropped.
@@ -267,8 +309,11 @@ function configure(app, url) {
   configure(app, "https://example.com/voice");
   app.fire("appmessage", { payload: { 10000: "hello" } });
 
-  assert.deepEqual(app.sent[0], { [KEYS.reply]: "hi" });
-  assert.deepEqual(app.sent[1], { [KEYS.error]: "The watch could not accept the reply." });
+  assert.deepEqual(app.sent[0], { [KEYS.reply]: "hi", [KEYS.size]: 24 });
+  assert.deepEqual(app.sent[1], {
+    [KEYS.error]: "The watch could not accept the reply.",
+    [KEYS.size]: 24,
+  });
 }
 
 // Logs must stay ASCII: libpebble2 crashes on a multi-byte char cut in half.
@@ -284,6 +329,57 @@ function configure(app, url) {
     app.logged.some((l) => /transcript: 6 chars/.test(l)),
     "transcript must be logged as a length, never verbatim"
   );
+}
+
+/* Text size: the saved setting rides along with every message, and a reply may
+   override it. Only the sizes the firmware ships may reach the watch. */
+for (const [saved, replied, expected, why] of [
+  [36, undefined, 36, "the configured size must be sent"],
+  [36, 16, 18, "16 rounds up to the nearest shipped size"],
+  [undefined, 200, 36, "an absurd size is clamped, not passed through"],
+]) {
+  const body = JSON.stringify({ response: "hi", size: replied });
+  const app = loadPkjs(fakeXhr({ status: 200, body }));
+  configure(app, "https://example.com/voice", saved);
+  app.fire("appmessage", { payload: { 10000: "hello" } });
+  assert.equal(app.sent[0][KEYS.size], expected, why);
+}
+
+/* The picker can only offer sizes it has a preview for, so a size saved when
+   the shipped list was different has to be snapped before the page sees it —
+   an option value nothing matches leaves the select blank and saves 0. */
+{
+  const app = loadPkjs(fakeXhr({ status: 200, body: "{}" }));
+  configure(app, "https://example.com/voice", 40);
+  app.fire("showConfiguration", {});
+
+  const shown = decodeURIComponent(app.opened[0]);
+  assert.match(shown, /var saved = \{[^}]*"size":36/, "40 must arrive as a size the page offers");
+  assert.match(shown, new RegExp('<option value="36"'), "and that size must be an option");
+}
+
+/* --- the shipped size list is written down once per build target --- */
+
+function shippedSizes(source, where) {
+  const found = source.match(/SIZES = \[([^\]]+)\]/);
+  assert.ok(found, where + " must declare SIZES as a one-line array");
+  return found[1].split(",").map((s) => Number(s.trim()));
+}
+
+const SHIPPED = shippedSizes(watchSource, "main.js");
+assert.deepEqual(
+  shippedSizes(readFileSync(new URL("../src/pkjs/index.js", import.meta.url), "utf8"), "index.js"),
+  SHIPPED,
+  "watch and phone must agree on the shipped sizes"
+);
+
+/* The previews are generated and drive the settings picker, so a size added
+   without rerunning tools/gothic-preview.mjs would vanish from the page. */
+const previews = require("../src/pkjs/preview.js");
+assert.deepEqual(Object.keys(previews).map(Number), SHIPPED, "every size needs a preview");
+for (const size of SHIPPED) {
+  assert.match(previews[size], /^data:image\/png;base64,/, size + " preview must be a PNG");
+  assert.match(page, new RegExp('<option value="' + size + '"'), size + " must be offered");
 }
 
 report("ok");

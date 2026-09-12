@@ -1,7 +1,7 @@
 {
   "name": "pebble-voice-relay",
   "author": "Maxim Lepekha",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "keywords": [
     "pebble-app"
   ],
@@ -12,7 +12,7 @@
     "build": "npm run check && .venv/bin/pebble build",
     "install:watch": "npm run build && .venv/bin/pebble install --cloudpebble --logs",
     "install:phone": "npm run build && .venv/bin/pebble install --phone \"$PEBBLE_PHONE\" --logs",
-    "install:emulator": "npm run build && .venv/bin/pebble install --emulator emery",
+    "дinstall:emulator": "npm run build && .venv/bin/pebble install --emulator emery",
     "screenshot": ".venv/bin/pebble screenshot --cloudpebble",
     "logs": ".venv/bin/pebble logs --cloudpebble",
     "setup": "python3 -m venv .venv && .venv/bin/pip install pebble-tool"
@@ -35,7 +35,8 @@
     "messageKeys": [
       "text",
       "reply",
-      "error"
+      "error",
+      "size"
     ],
     "resources": {
       "media": [

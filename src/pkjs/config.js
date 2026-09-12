@@ -1,3 +1,13 @@
+var previews = require('./preview');
+
+/* The previews are generated per shipped size, so their keys are the sizes
+   worth offering — one list instead of two that can drift apart. */
+var options = Object.keys(previews)
+  .map(function (size) {
+    return '<option value="' + size + '">' + size + '</option>';
+  })
+  .join('');
+
 /* Settings page as a self-contained data: URI — nothing to host. */
 module.exports = function configPage(saved) {
   var html =
@@ -5,11 +15,13 @@ module.exports = function configPage(saved) {
     '<title>Voice Relay</title>' +
     '<style>body{font:16px -apple-system,system-ui,sans-serif;margin:16px}' +
     'label{display:block;margin:16px 0 4px;font-weight:600}' +
-    'input,textarea{width:100%;box-sizing:border-box;padding:8px;font:inherit}' +
+    'input,textarea,select{width:100%;box-sizing:border-box;padding:8px;font:inherit}' +
     'button{margin-top:12px;padding:12px;width:100%;font:inherit}' +
     'p{color:#666;font-size:14px;margin:4px 0 0}' +
     '#result{white-space:pre-wrap;word-break:break-word;background:#f2f2f2;' +
-    'padding:8px;margin-top:12px;font:13px ui-monospace,monospace}</style>' +
+    'padding:8px;margin-top:12px;font:13px ui-monospace,monospace}' +
+    '#preview{display:block;width:200px;height:228px;margin-top:8px;' +
+    'border:1px solid #ccc;background:#fff;image-rendering:pixelated}</style>' +
     '<label for="url">Endpoint URL</label>' +
     '<input id="url" type="url" placeholder="https://example.com/voice">' +
     '<p>Receives <code>{"text": "...", "conversation_id": "..."}</code>, must answer ' +
@@ -18,6 +30,11 @@ module.exports = function configPage(saved) {
     '<label for="headers">Headers</label>' +
     '<textarea id="headers" rows="5" placeholder="Authorization: Bearer ..."></textarea>' +
     '<p>One per line, <code>Name: value</code>.</p>' +
+    '<label for="size">Text size</label>' +
+    '<select id="size">' + options + '</select>' +
+    '<img id="preview" width="200" height="228" alt="">' +
+    '<p>A reply may override it with <code>{"response": "...", "size": 18}</code>; ' +
+    'any other number is rounded to the nearest size above.</p>' +
     '<button id="test">Test</button>' +
     '<p>Posts the word "test" using the fields above, without saving them.</p>' +
     '<button id="save">Save</button>' +
@@ -27,8 +44,14 @@ module.exports = function configPage(saved) {
     'var url = document.getElementById("url");' +
     'var headers = document.getElementById("headers");' +
     'var result = document.getElementById("result");' +
+    'var size = document.getElementById("size");' +
+    'var preview = document.getElementById("preview");' +
+    'var previews = ' + JSON.stringify(previews) + ';' +
     'url.value = saved.url || "";' +
     'headers.value = saved.headers || "";' +
+    'size.value = String(saved.size);' +
+    'size.oninput = function () { preview.src = previews[size.value]; };' +
+    'size.oninput();' +
     'function say(text) { result.hidden = false; result.textContent = text; }' +
     'function parseHeaders(text) {' +
     '  var out = {};' +
@@ -61,7 +84,7 @@ module.exports = function configPage(saved) {
     '};' +
     'document.getElementById("save").onclick = function () {' +
     '  location.href = "pebblejs://close#" + encodeURIComponent(JSON.stringify(' +
-    '    { url: url.value.trim(), headers: headers.value }));' +
+    '    { url: url.value.trim(), headers: headers.value, size: Number(size.value) }));' +
     '};' +
     '<\/script>';
 
